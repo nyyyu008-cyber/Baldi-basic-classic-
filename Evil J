@@ -1,0 +1,261 @@
+-- Roblox Developer Control Panel (Client-Side LocalScript)
+-- Place this inside StarterPlayerScripts or StarterGui
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+
+-- State Variables
+local isGodMode = false
+local isInfiniteItems = false
+local godModeConnection = nil
+local backpackConnection = nil
+
+-- Create UI Elements
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "DevControlPanel"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 320, 0, 420)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 27, 38)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 12)
+uiCorner.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, 0, 0, 45)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "DEVELOPER PANEL"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 18
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = mainFrame
+
+local container = Instance.new("Frame")
+container.Name = "Container"
+container.Size = UDim2.new(1, -30, 1, -60)
+container.Position = UDim2.new(0, 15, 0, 45)
+container.BackgroundTransparency = 1
+container.Parent = mainFrame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Padding = UDim.new(0, 10)
+listLayout.Parent = container
+
+-- Utility Function to Create Styled Buttons
+local function createButton(text, layoutOrder)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 40)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 44, 60)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(220, 220, 220)
+    btn.TextSize = 14
+    btn.Font = Enum.Font.GothamMedium
+    btn.LayoutOrder = layoutOrder
+    btn.AutoButtonColor = false
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = btn
+    
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(55, 60, 80)}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 44, 60)}):Play()
+    end)
+    
+    btn.Parent = container
+    return btn
+end
+
+-- 1. God Mode Toggle
+local godBtn = createButton("God Mode: OFF", 1)
+
+local function enableGodMode(character)
+    local humanoid = character:WaitForChild("Humanoid", 5)
+    if humanoid then
+        humanoid.MaxHealth = math.huge
+        humanoid.Health = math.huge
+        if godModeConnection then godModeConnection:Disconnect() end
+        godModeConnection = humanoid.HealthChanged:Connect(function()
+            if isGodMode and humanoid.Health < humanoid.MaxHealth then
+                humanoid.Health = humanoid.MaxHealth
+            end
+        end)
+    end
+end
+
+godBtn.MouseButton1Click:Connect(function()
+    isGodMode = not isGodMode
+    if isGodMode then
+        godBtn.Text = "God Mode: ON"
+        godBtn.TextColor3 = Color3.fromRGB(80, 255, 120)
+        if LocalPlayer.Character then
+            enableGodMode(LocalPlayer.Character)
+        end
+    else
+        godBtn.Text = "God Mode: OFF"
+        godBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+        if godModeConnection then godModeConnection:Disconnect() end
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+            LocalPlayer.Character.Humanoid.MaxHealth = 100
+            LocalPlayer.Character.Humanoid.Health = 100
+        end
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    if isGodMode then
+        enableGodMode(char)
+    end
+end)
+
+-- 2. Unlimited Items Toggle
+local itemBtn = createButton("Infinite Items: OFF", 2)
+
+itemBtn.MouseButton1Click:Connect(function()
+    isInfiniteItems = not isInfiniteItems
+    if isInfiniteItems then
+        itemBtn.Text = "Infinite Items: ON"
+        itemBtn.TextColor3 = Color3.fromRGB(80, 255, 120)
+        
+        backpackConnection = LocalPlayer.Backpack.ChildAdded:Connect(function(child)
+            if child:IsA("Tool") and isInfiniteItems then
+                child.AncestryChanged:Connect(function(_, parent)
+                    if not parent and isInfiniteItems then
+                        local clonedTool = child:Clone()
+                        clonedTool.Parent = LocalPlayer.Backpack
+                    end
+                end)
+            end
+        end)
+    else
+        itemBtn.Text = "Infinite Items: OFF"
+        itemBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+        if backpackConnection then backpackConnection:Disconnect() end
+    end
+end)
+
+-- Helper Function: Build Tool Instance
+local function createBookTool(name)
+    local tool = Instance.new("Tool")
+    tool.Name = name or "Magic Book"
+    tool.RequiresHandle = true
+
+    local handle = Instance.new("Part")
+    handle.Name = "Handle"
+    handle.Size = Vector3.new(1.2, 1.6, 0.3)
+    handle.Color = Color3.fromRGB(140, 30, 40)
+    handle.Material = Enum.Material.SmoothPlastic
+    handle.Parent = tool
+
+    local mesh = Instance.new("SpecialMesh")
+    mesh.MeshType = Enum.MeshType.Brick
+    mesh.Parent = handle
+
+    return tool
+end
+
+-- 3. Spawn Book Button
+local spawnBtn = createButton("Spawn Magic Book", 3)
+spawnBtn.MouseButton1Click:Connect(function()
+    local book = createBookTool("Magic Book")
+    book.Parent = LocalPlayer:WaitForChild("Backpack")
+end)
+
+-- 4. Duplicator Controls (Input Box + Duplicate Button)
+local dupContainer = Instance.new("Frame")
+dupContainer.Size = UDim2.new(1, 0, 0, 40)
+dupContainer.BackgroundTransparency = 1
+dupContainer.LayoutOrder = 4
+dupContainer.Parent = container
+
+local dupLayout = Instance.new("UIListLayout")
+dupLayout.FillDirection = Enum.FillDirection.Horizontal
+dupLayout.Padding = UDim.new(0, 10)
+dupLayout.Parent = dupContainer
+
+local amountBox = Instance.new("TextBox")
+amountBox.Size = UDim2.new(0.3, -5, 1, 0)
+amountBox.BackgroundColor3 = Color3.fromRGB(30, 33, 45)
+amountBox.Text = "5"
+amountBox.PlaceholderText = "Count"
+amountBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+amountBox.TextSize = 14
+amountBox.Font = Enum.Font.GothamMedium
+amountBox.Parent = dupContainer
+
+local boxCorner = Instance.new("UICorner")
+boxCorner.CornerRadius = UDim.new(0, 8)
+boxCorner.Parent = amountBox
+
+local dupBtn = Instance.new("TextButton")
+dupBtn.Size = UDim2.new(0.7, -5, 1, 0)
+dupBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 60)
+dupBtn.Text = "Duplicate Books"
+dupBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+dupBtn.TextSize = 14
+dupBtn.Font = Enum.Font.GothamMedium
+dupBtn.AutoButtonColor = false
+dupBtn.Parent = dupContainer
+
+local dupBtnCorner = Instance.new("UICorner")
+dupBtnCorner.CornerRadius = UDim.new(0, 8)
+dupBtnCorner.Parent = dupBtn
+
+dupBtn.MouseButton1Click:Connect(function()
+    local count = tonumber(amountBox.Text) or 1
+    count = math.clamp(count, 1, 100)
+    
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    local character = LocalPlayer.Character
+    
+    -- Check for existing books held or in backpack
+    local templateBook = nil
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA("Tool") and string.find(string.lower(item.Name), "book") then
+            templateBook = item
+            break
+        end
+    end
+    
+    if not templateBook and character then
+        for _, item in ipairs(character:GetChildren()) do
+            if item:IsA("Tool") and string.find(string.lower(item.Name), "book") then
+                templateBook = item
+                break
+            end
+        end
+    end
+    
+    -- Clone existing or generate new ones
+    for i = 1, count do
+        if templateBook then
+            local cloned = templateBook:Clone()
+            cloned.Parent = backpack
+        else
+            local newBook = createBookTool("Magic Book")
+            newBook.Parent = backpack
+        end
+    end
+end)
+
+-- Toggle Menu Keybind (Right Control)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed and input.KeyCode == Enum.KeyCode.RightControl then
+        mainFrame.Visible = not mainFrame.Visible
+    end
+end)
